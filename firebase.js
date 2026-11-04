@@ -1,4 +1,3 @@
-
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 
 import {
@@ -17,6 +16,7 @@ import {
   onSnapshot,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
 // ==========================================
 // FIREBASE CONFIGURATION
 // ==========================================
@@ -57,6 +57,11 @@ let writeTimer = null;
 let unsubscribeDocument = null;
 let applyingCloudState = false;
 
+// Version counters let us tell "my own save is still in flight"
+// apart from "another device changed the data".
+let localVersion = 0;   // bumped on every local change
+let savedVersion = 0;   // last version confirmed written to Firestore
+
 // ==========================================
 // DEFAULT EMPTY TRACKER
 // ==========================================
@@ -82,6 +87,10 @@ function createEmptyState(user) {
 
     entries: [],
     tasksByDate: {},
+    dailyGoalTemplates: [],
+    weeklyGoals: [],
+    weeklyGoalProgress: {},
+    targetSchedule: [],
     reminderLog: {}
   };
 }
@@ -120,26 +129,6 @@ function emitCloudState(data) {
 }
 
 // ==========================================
-// GOOGLE SIGN IN
-// ==========================================
-
-async function signIn() {
-  try {
-    emitStatus(null, 'Opening Google sign-in...');
-
-    await signInWithPopup(auth, provider);
-
-  } catch (error) {
-    console.error('Google sign-in failed:', error);
-
-    emitStatus(
-      null,
-      `Sign-in failed: ${friendlyError(error)}`
-    );
-  }
-}
-
-// ==========================================
 // FRIENDLY ERROR MESSAGES
 // ==========================================
 
@@ -162,17 +151,41 @@ function friendlyError(error) {
     code === 'permission-denied' ||
     code === 'firestore/permission-denied'
   ) {
-    return 'Firestore denied access. Check your security rules.';
+    return 'Firestore denied access. Check your security rules and make sure they are published.';
+  }
+
+  if (code === 'not-found') {
+    return 'Firestore database not found. Create it in the Firebase console (Build → Firestore Database).';
   }
 
   if (
     error?.message?.includes('client is offline') ||
     code === 'unavailable'
   ) {
-    return 'Unable to connect to Firebase. Check your internet connection and try again.';
+    return 'Unable to connect to Firestore. Check your connection and that the Firestore database has been created.';
   }
 
   return error?.message || 'Something went wrong. Please try again.';
+}
+
+// ==========================================
+// GOOGLE SIGN IN
+// ==========================================
+
+async function signIn() {
+  try {
+    emitStatus(null, 'Opening Google sign-in...');
+
+    await signInWithPopup(auth, provider);
+
+  } catch (error) {
+    console.error('Google sign-in failed:', error);
+
+    emitStatus(
+      null,
+      `Sign-in failed: ${friendlyError(error)}`
+    );
+  }
 }
 
 // ==========================================
@@ -207,6 +220,9 @@ async function signOutUser() {
 // ==========================================
 
 function scheduleCloudSave(data) {
+  // Changes made while the cloud copy is still loading are intentionally
+  // not uploaded: the loaded cloud data replaces the screen, and uploading
+  // a half-empty state could overwrite an existing account's data.
   if (
     !activeUser ||
     !cloudReady ||
@@ -216,6 +232,9 @@ function scheduleCloudSave(data) {
   }
 
   const userId = activeUser.uid;
+
+  localVersion += 1;
+  const myVersion = localVersion;
 
   clearTimeout(writeTimer);
 
@@ -234,6 +253,8 @@ function scheduleCloudSave(data) {
     try {
       const userRef = doc(db, 'users', userId);
 
+      // mergeFields replaces the whole appData object, so deleted
+      // entries / tasks / goals are really removed from Firestore.
       await setDoc(
         userRef,
         {
@@ -241,9 +262,13 @@ function scheduleCloudSave(data) {
           updatedAt: serverTimestamp()
         },
         {
-          merge: true
+          mergeFields: ['appData', 'updatedAt']
         }
       );
+
+      savedVersion = Math.max(savedVersion, myVersion);
+
+      console.info('WeightTrack: saved to Firestore.');
 
       if (auth.currentUser?.uid === userId) {
         emitStatus(
@@ -304,6 +329,9 @@ onAuthStateChanged(auth, async user => {
 
   clearTimeout(writeTimer);
 
+  localVersion = 0;
+  savedVersion = 0;
+
   if (unsubscribeDocument) {
     unsubscribeDocument();
     unsubscribeDocument = null;
@@ -332,7 +360,6 @@ onAuthStateChanged(auth, async user => {
   );
 
   // Immediately clear old account data from the interface.
-  // This prevents another account's data appearing while loading.
   emitCloudState(createEmptyState(user));
 
   // Each Google account has a separate document.
@@ -367,8 +394,6 @@ onAuthStateChanged(auth, async user => {
     } else {
 
       // New account: create a completely fresh tracker.
-      // DO NOT COPY DATA FROM LOCAL STORAGE.
-
       const emptyState = createEmptyState(user);
 
       await setDoc(userRef, {
@@ -396,7 +421,7 @@ onAuthStateChanged(auth, async user => {
     cloudReady = true;
 
     // ======================================
-    // REAL-TIME CLOUD SYNC
+    // REAL-TIME CLOUD SYNC (other devices)
     // ======================================
 
     unsubscribeDocument = onSnapshot(
@@ -410,6 +435,15 @@ onAuthStateChanged(auth, async user => {
         }
 
         if (!docSnapshot.exists()) {
+          return;
+        }
+
+        // Ignore echoes of our own writes, and anything that arrives
+        // while a newer local change is still waiting to be saved.
+        if (
+          docSnapshot.metadata.hasPendingWrites ||
+          localVersion !== savedVersion
+        ) {
           return;
         }
 
