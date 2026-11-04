@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f7f4" />
+  <title>WeightTrack — Your progress, clearly.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#home" aria-label="WeightTrack home">
+        <span class="brand-mark">W</span>
+        <span class="brand-name">weight<span>track</span></span>
+      </a>
+
+      <div class="side-label">WORKSPACE</div>
+      <nav class="side-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="home"><span class="nav-icon">⌂</span><span>Overview</span></button>
+        <button class="nav-item" data-view="history"><span class="nav-icon">▤</span><span>Weight history</span></button>
+        <button class="nav-item" data-view="progress"><span class="nav-icon">↗</span><span>Progress</span></button>
+        <button class="nav-item" data-view="goals"><span class="nav-icon">◎</span><span>Goals & reminders</span></button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-tip">
+        <div class="tip-icon">✦</div>
+        <p class="tip-title">Small steps add up.</p>
+        <p class="tip-copy">Your trend matters more than a single weigh-in.</p>
+      </div>
+      <button class="profile-button" id="profileButton">
+        <span class="avatar" id="avatarInitials">Y</span>
+        <span class="profile-copy"><strong id="profileNameSide">Your profile</strong><small>Personal tracker</small></span>
+        <span class="profile-more">•••</span>
+      </button>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">W</span><span class="brand-name">weight<span>track</span></span></div>
+        <div class="breadcrumb"><span>Workspace</span><b>/</b><strong id="breadcrumbTitle">Overview</strong></div>
+        <div class="top-actions">
+          <span class="today-label" id="todayLabel"></span>
+          <button class="icon-button" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark theme">☾</button>
+          <button class="auth-button" id="authButton" type="button">Sign in with Google</button>
+          <button class="avatar top-avatar" id="topAvatar" aria-label="Profile">Y</button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-home">
+        <div class="page-heading heading-row">
+          <div><p class="eyebrow">YOUR PERSONAL SPACE</p><h1>Good <span id="greetingWord">day</span><span class="heading-period">.</span></h1><p class="subheading">A little progress, repeated consistently.</p></div>
+          <button class="primary-button" id="logWeightTop"><span>＋</span> Log weight</button>
+        </div>
+
+        <div class="setup-banner hidden" id="setupBanner">
+          <div><strong>Your tracker is ready when you are.</strong><p>Set a starting weight and target to personalize your dashboard.</p></div>
+          <button class="secondary-button" data-open-goals>Set up goals <span>→</span></button>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card current-card">
+            <div class="metric-top"><span class="metric-label">CURRENT WEIGHT</span><span class="metric-icon">⚖</span></div>
+            <div class="metric-value"><span id="currentWeight">—</span><small id="weightUnit">kg</small></div>
+            <div class="metric-foot"><span class="status-dot"></span><span id="lastLoggedText">Log your first weigh-in</span></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span class="metric-label">TOTAL CHANGE</span><span class="metric-icon soft-green">↘</span></div>
+            <div class="metric-value"><span id="totalChange">—</span><small id="changeUnit">kg</small></div>
+            <div class="metric-foot"><span id="changeCaption">Since your first entry</span></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span class="metric-label">GOAL WEIGHT</span><span class="metric-icon soft-purple">◎</span></div>
+            <div class="metric-value"><span id="goalWeight">—</span><small id="goalUnit">kg</small></div>
+            <div class="metric-foot"><span id="remainingText">Set a goal to get started</span></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span class="metric-label">MAIN GOAL PROGRESS</span><span class="metric-icon soft-amber">✦</span></div>
+            <div class="metric-value"><span id="goalPercent">0</span><small>%</small></div>
+            <div class="mini-progress"><span id="goalProgressBar"></span></div>
+            <div class="metric-foot"><span>Progress towards your final goal</span></div>
+          </article>
+          <article class="metric-card custom-progress-card">
+            <div class="metric-top"><span class="metric-label">CUSTOM PLAN PROGRESS</span><span class="metric-icon soft-purple">⌁</span></div>
+            <div class="metric-value"><span id="customGoalPercent">0</span><small>%</small></div>
+            <div class="mini-progress custom-mini-progress"><span id="customGoalProgressBar"></span></div>
+            <div class="metric-foot"><span id="customGoalCaption">Add a dated target</span></div>
+          </article>
+        </div>
+
+        <div class="content-grid">
+          <article class="panel chart-panel">
+            <div class="panel-heading"><div><p class="eyebrow">THE BIG PICTURE</p><h2>Weight trend</h2><p class="panel-subtitle">Watch your progress over time.</p></div><div class="chart-filters" role="group" aria-label="Chart period"><button class="filter-button" data-range="7">7D</button><button class="filter-button active" data-range="30">30D</button><button class="filter-button" data-range="90">90D</button><button class="filter-button" data-range="all">All</button></div></div>
+            <div class="chart-wrap"><canvas id="weightChart" aria-label="Weight trend chart"></canvas><div class="chart-empty" id="chartEmpty">Your weight trend will appear here after your first few entries.</div></div>
+            <div class="chart-legend"><span><i></i> Weight</span><span class="chart-note">Trends are more useful than daily fluctuations.</span></div>
+          </article>
+
+          <article class="panel goal-panel">
+            <div class="panel-heading"><div><p class="eyebrow">KEEP YOUR EYE ON IT</p><h2>Your goal</h2></div><button class="text-button" data-view-link="goals">Edit ↗</button></div>
+            <div class="goal-visual"><div class="goal-ring" id="goalRing"><div class="goal-ring-inner"><strong id="ringPercent">0%</strong><small>completed</small></div></div></div>
+            <div class="goal-values"><div><small>START</small><strong id="startWeightLabel">—</strong></div><div class="goal-arrow">→</div><div><small>TARGET</small><strong id="targetWeightLabel">—</strong></div></div>
+            <div class="goal-divider"></div>
+            <div class="next-checkin"><span class="calendar-icon">▦</span><div><small>NEXT WEIGH-IN</small><strong id="nextCheckin">Choose your days</strong></div></div>
+          </article>
+        </div>
+
+        <div class="bottom-grid">
+          <article class="panel daily-panel">
+            <div class="panel-heading"><div><p class="eyebrow">TODAY'S FOCUS</p><h2>Daily targets</h2><p class="panel-subtitle" id="dailyDateLabel">A few simple actions for today.</p></div><span class="task-count" id="taskCount">0/4</span></div>
+            <div class="task-list" id="taskList"></div>
+            <button class="add-task-button" id="addTaskButton">＋ Add a personal target</button>
+          </article>
+          <article class="panel summary-panel">
+            <div class="panel-heading"><div><p class="eyebrow">A QUICK CHECK-IN</p><h2>This week</h2></div><span class="summary-icon">✧</span></div>
+            <div class="weekly-highlight"><strong id="weeklyChange">—</strong><span id="weeklyCaption">Weight change in the last 7 days</span></div>
+            <div class="summary-row"><span>Weigh-ins logged</span><strong id="weeklyEntries">0</strong></div>
+            <div class="summary-row"><span>Daily targets completed</span><strong id="weeklyTasks">0%</strong></div>
+            <div class="summary-foot">Keep showing up. The numbers tell only part of the story.</div>
+          </article>
+        </div>
+        <article class="panel weekly-goals-panel">
+          <div class="panel-heading"><div><p class="eyebrow">YOUR WEEK, YOUR PACE</p><h2>Weekly goals</h2><p class="panel-subtitle">Small commitments you can complete across the week.</p></div><button class="text-button" data-view-link="goals">Manage ↗</button></div>
+          <div id="weeklyGoalList" class="weekly-goal-list"></div>
+        </article>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="page-heading heading-row"><div><p class="eyebrow">YOUR RECORD</p><h1>Weight history<span class="heading-period">.</span></h1><p class="subheading">Every entry is a snapshot. Together, they show the journey.</p></div><button class="primary-button" id="logWeightHistory">＋ Log weight</button></div>
+        <article class="panel history-panel"><div class="panel-heading"><div><h2>All weigh-ins</h2><p class="panel-subtitle" id="historyCount">0 entries recorded</p></div><button class="secondary-button small-button" id="exportCsv">↓ Export CSV</button></div><div class="table-wrap"><table><thead><tr><th>DATE</th><th>WEIGHT</th><th>CHANGE</th><th>NOTE</th><th></th></tr></thead><tbody id="historyTable"></tbody></table><div class="history-empty" id="historyEmpty">No weigh-ins yet. Add your first entry to start building your history.</div></div></article>
+      </section>
+
+      <section class="view" id="view-progress">
+        <div class="page-heading"><p class="eyebrow">YOUR JOURNEY, IN CONTEXT</p><h1>Progress<span class="heading-period">.</span></h1><p class="subheading">Look at the bigger picture and celebrate consistency.</p></div>
+        <div class="progress-stats metric-grid three-col"><article class="metric-card"><div class="metric-top"><span class="metric-label">ALL-TIME CHANGE</span><span class="metric-icon soft-green">↘</span></div><div class="metric-value"><span id="allTimeChange">—</span><small>kg</small></div><div class="metric-foot">From your first weigh-in</div></article><article class="metric-card"><div class="metric-top"><span class="metric-label">BEST WEIGHT</span><span class="metric-icon soft-purple">✦</span></div><div class="metric-value"><span id="bestWeight">—</span><small>kg</small></div><div class="metric-foot">Lowest recorded weight</div></article><article class="metric-card"><div class="metric-top"><span class="metric-label">TOTAL WEIGH-INS</span><span class="metric-icon soft-amber">▤</span></div><div class="metric-value"><span id="totalEntries">0</span></div><div class="metric-foot">Every entry counts</div></article></div>
+        <div class="content-grid progress-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">MILESTONES</p><h2>Celebrate the steps</h2><p class="panel-subtitle">Small wins deserve recognition.</p></div></div><div id="milestoneList" class="milestone-list"></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">CONSISTENCY</p><h2>Your check-ins</h2><p class="panel-subtitle">How regularly are you recording?</p></div></div><div class="consistency-number"><strong id="checkinRate">0%</strong><span>of planned weigh-ins this month</span></div><div class="consistency-track"><span id="checkinRateBar"></span></div><p class="consistency-note" id="consistencyNote">Choose a schedule that works for you.</p></article></div>
+      </section>
+
+      <section class="view" id="view-goals">
+        <div class="page-heading"><p class="eyebrow">MAKE IT YOURS</p><h1>Goals & reminders<span class="heading-period">.</span></h1><p class="subheading">Choose a realistic target and a routine you can maintain.</p></div>
+        <div class="settings-grid">
+          <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">YOUR WEIGHT GOAL</p><h2>Goal details</h2></div><span class="panel-badge">PERSONAL</span></div><form id="goalForm" class="form-grid"><label>Starting weight <div class="input-with-unit"><input type="number" id="startWeightInput" min="0.1" max="500" step="0.1" placeholder="e.g. 85.0" required><span>kg</span></div></label><label>Target weight <div class="input-with-unit"><input type="number" id="targetWeightInput" min="0.1" max="500" step="0.1" placeholder="e.g. 75.0" required><span>kg</span></div></label><label>Height <div class="input-with-unit"><input type="number" id="heightInput" min="50" max="250" step="0.1" placeholder="Optional"><span>cm</span></div></label><label>Target date <input type="date" id="targetDateInput"></label><label class="full-width">Preferred weekly change <select id="weeklyRateInput"><option value="0.25">0.25 kg / week — gradual</option><option value="0.5" selected>0.5 kg / week — moderate</option><option value="0.75">0.75 kg / week</option><option value="1">1.0 kg / week</option></select><small class="field-hint">This is a planning preference, not a guaranteed or medically prescribed rate.</small></label><div class="form-actions full-width"><button class="primary-button" type="submit">Save goal</button><span class="save-message" id="goalSaveMessage" aria-live="polite"></span></div></form></article>
+          <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">YOUR ROUTINE</p><h2>Weigh-in schedule</h2><p class="panel-subtitle">Pick the days that suit you.</p></div></div><div class="weekday-picker" id="weekdayPicker"><button data-day="1">M</button><button data-day="2">T</button><button data-day="3">W</button><button data-day="4">T</button><button data-day="5">F</button><button data-day="6">S</button><button data-day="0">S</button></div><p class="field-hint">Your selected days will show up as weigh-in reminders.</p><label class="form-label top-gap">Weigh-in reminder time<input type="time" id="weighTimeInput" value="08:00"></label><button class="secondary-button full-button" id="saveSchedule">Save schedule</button><p class="save-message" id="scheduleSaveMessage" aria-live="polite"></p></article>
+          <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">A GENTLE NUDGE</p><h2>Daily reminder</h2><p class="panel-subtitle">A friendly prompt to stay connected to your goals.</p></div><span class="reminder-bell">♧</span></div><label class="toggle-row"><span><strong>Daily target reminder</strong><small>Remind me about today's focus.</small></span><input type="checkbox" id="dailyReminderToggle" class="switch"></label><label class="form-label">Reminder time<input type="time" id="dailyTimeInput" value="09:00"></label><button class="primary-button full-button" id="enableNotifications">Enable browser notifications</button><p class="notification-note" id="notificationStatus">Notifications need your permission. This first version can remind you while the app is open; background notifications will be added with push setup.</p></article>
+          <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">YOUR DATA</p><h2>Profile & data</h2></div></div><label class="form-label">Display name<input type="text" id="displayNameInput" placeholder="Your name"></label><label class="form-label">Weight unit<select id="unitInput"><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select></label><button class="secondary-button full-button" id="saveProfile">Save profile</button><div class="settings-divider"></div><div class="cloud-account-row"><span><strong id="cloudAccountName">Not signed in</strong><small id="cloudSyncStatus">Your data is saved in this browser.</small></span><button class="secondary-button" id="signOutButton" type="button" disabled>Sign out</button></div><button class="danger-button" id="resetData">Reset all data</button><p class="notification-note" id="cloudDataNote">Sign in with Google to back up your tracker to your private Firestore account and sync it across devices.</p></article>
+        </div>
+        <article class="panel target-planner-panel" id="targetPlanner">
+          <div class="panel-heading"><div><p class="eyebrow">YOUR PLAN, YOUR DATES</p><h2>Custom weight targets</h2><p class="panel-subtitle">Set a target weight for any date. Each target is compared only with a weigh-in recorded on that exact date.</p></div><span class="panel-badge">PLANNED VS ACTUAL</span></div>
+          <form id="targetPlanForm" class="target-plan-form">
+            <label>Target date<input type="date" id="plannedTargetDate" required></label>
+            <label>Target weight <div class="input-with-unit"><input type="number" id="plannedTargetWeight" min="0.1" max="500" step="0.1" placeholder="e.g. 123.5" required><span class="target-unit-label">kg</span></div></label>
+            <button class="primary-button" type="submit" id="savePlannedTarget">＋ Add target</button>
+            <button class="secondary-button hidden" type="button" id="cancelTargetEdit">Cancel edit</button>
+          </form>
+          <p class="field-hint">No automatic targets are created. Add only the dates you want to track — for example, your Thursday and Sunday weigh-ins.</p>
+          <div class="target-plan-summary" id="targetPlanSummary"></div>
+          <div class="table-wrap target-table-wrap"><table><thead><tr><th>DATE</th><th>TARGET</th><th>ACTUAL</th><th>DIFFERENCE</th><th>STATUS</th><th></th></tr></thead><tbody id="targetPlanTable"></tbody></table><div class="history-empty" id="targetPlanEmpty">No dated targets yet. Add your first date and target weight above.</div></div>
+        </article>
+        <article class="panel weekly-goals-manager">
+          <div class="panel-heading"><div><p class="eyebrow">BUILD YOUR ROUTINE</p><h2>Custom weekly goals</h2><p class="panel-subtitle">Choose what matters and how many times you want to do it each week.</p></div><button class="primary-button" id="addWeeklyGoalButton">＋ Add weekly goal</button></div>
+          <div id="weeklyGoalManagerList" class="weekly-goal-manager-list"></div>
+        </article>
+      </section>
+
+      <footer class="app-footer"><span>WEIGHTTRACK</span><span>Progress, not perfection.</span></footer>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Mobile navigation"><button class="active" data-view="home"><span>⌂</span><small>Home</small></button><button data-view="history"><span>▤</span><small>History</small></button><button data-view="progress"><span>↗</span><small>Progress</small></button><button data-view="goals"><span>◎</span><small>Goals</small></button></nav>
+
+  <div class="modal-backdrop hidden" id="weightModal" role="dialog" aria-modal="true" aria-labelledby="weightModalTitle"><div class="modal-card"><button class="modal-close" data-close-modal aria-label="Close">×</button><p class="eyebrow">A NEW CHECK-IN</p><h2 id="weightModalTitle">Log your weight</h2><p class="modal-intro">One measurement is just a moment. Your history shows the trend.</p><form id="weightForm"><label class="form-label">Weight <div class="input-with-unit"><input type="number" id="entryWeight" min="0.1" max="500" step="0.1" placeholder="e.g. 82.4" required><span>kg</span></div></label><label class="form-label">Date<input type="date" id="entryDate" required></label><label class="form-label">Note <textarea id="entryNote" rows="3" maxlength="180" placeholder="Optional — how are you feeling?"></textarea></label><div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancel</button><button class="primary-button" type="submit" id="saveEntryButton">Save weigh-in</button></div></form></div></div>
+
+  <div class="modal-backdrop hidden" id="taskModal" role="dialog" aria-modal="true" aria-labelledby="taskModalTitle"><div class="modal-card compact-modal"><button class="modal-close" data-close-modal aria-label="Close">×</button><p class="eyebrow">MAKE IT PERSONAL</p><h2 id="taskModalTitle">Add a daily target</h2><form id="taskForm"><label class="form-label">Target name<input type="text" id="taskNameInput" maxlength="60" placeholder="e.g. Stretch for 10 minutes" required></label><label class="repeat-option"><input type="checkbox" id="repeatDailyInput" checked><span><strong>Repeat every day</strong><small>Add this target to each new day automatically.</small></span></label><div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancel</button><button class="primary-button" type="submit">Add target</button></div></form></div></div>
+
+  <div class="modal-backdrop hidden" id="weeklyGoalModal" role="dialog" aria-modal="true" aria-labelledby="weeklyGoalModalTitle"><div class="modal-card compact-modal"><button class="modal-close" data-close-modal aria-label="Close">×</button><p class="eyebrow">MAKE THIS WEEK COUNT</p><h2 id="weeklyGoalModalTitle">Create a weekly goal</h2><form id="weeklyGoalForm"><label class="form-label">Goal name<input type="text" id="weeklyGoalNameInput" maxlength="60" placeholder="e.g. Complete strength workouts" required></label><label class="form-label">How many times per week?<input type="number" id="weeklyGoalTargetInput" min="1" max="21" value="3" required></label><div class="modal-actions"><button class="secondary-button" type="button" data-close-modal>Cancel</button><button class="primary-button" type="submit">Create goal</button></div></form></div></div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+  <script type="module" src="firebase.js"></script>
+</body>
+</html>
