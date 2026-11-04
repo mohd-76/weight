@@ -1,7 +1,4 @@
 
-// WeightTrack Firebase integration
-// Firebase JS SDK modular v10.14.1
-
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 
 import {
@@ -13,7 +10,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
 import {
-  initializeFirestore,
+  getFirestore,
   doc,
   getDoc,
   setDoc,
@@ -21,7 +18,10 @@ import {
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-// Firebase configuration
+// ==========================================
+// FIREBASE CONFIGURATION
+// ==========================================
+
 const firebaseConfig = {
   apiKey: 'AIzaSyARaH4EwRYBHPXq1tBsD4RwxovFI-5i2cw',
   authDomain: 'weighttrack-cc98f.firebaseapp.com',
@@ -32,24 +32,23 @@ const firebaseConfig = {
   measurementId: 'G-KDMSL9R2Z4'
 };
 
-// Initialize Firebase
+// ==========================================
+// INITIALIZE FIREBASE
+// ==========================================
+
 const app = initializeApp(firebaseConfig);
-
-// Initialize Authentication
 const auth = getAuth(app);
+const db = getFirestore(app);
 
-// Initialize Firestore with Long Polling
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true
-});
-
-// Google Authentication
 const provider = new GoogleAuthProvider();
+
 provider.setCustomParameters({
   prompt: 'select_account'
 });
 
-const STORAGE_KEY = 'weighttrack_v1';
+// ==========================================
+// APP VARIABLES
+// ==========================================
 
 let activeUser = null;
 let cloudReady = false;
@@ -57,26 +56,55 @@ let writeTimer = null;
 let unsubscribeDocument = null;
 let applyingCloudState = false;
 
-// Cloud status
-const emitStatus = (user, message) => {
+// ==========================================
+// DEFAULT EMPTY TRACKER
+// ==========================================
+
+function createEmptyState(user) {
+  return {
+    profile: {
+      name: user?.displayName || '',
+      unit: 'kg',
+      heightCm: '',
+      startWeight: null,
+      targetWeight: null,
+      targetDate: '',
+      weeklyRate: 0.5,
+      weighDays: [4, 0],
+      weighTime: '08:00',
+      dailyReminder: false,
+      dailyTime: '09:00',
+      notificationsEnabled: false,
+      theme: 'light',
+      setupComplete: false
+    },
+
+    entries: [],
+    tasksByDate: {},
+    reminderLog: {}
+  };
+}
+
+// ==========================================
+// STATUS EVENTS
+// ==========================================
+
+function emitStatus(user, message) {
   window.dispatchEvent(
     new CustomEvent('weighttrack:cloud-status', {
-      detail: { user, message }
+      detail: {
+        user,
+        message
+      }
     })
   );
-};
+}
 
-// Get local data
-const localState = () => {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-  } catch (_) {
-    return null;
-  }
-};
+// ==========================================
+// LOAD CLOUD DATA INTO APP
+// ==========================================
 
-// Load cloud data into app
-const emitCloudState = data => {
+function emitCloudState(data) {
   applyingCloudState = true;
 
   window.dispatchEvent(
@@ -88,36 +116,15 @@ const emitCloudState = data => {
   queueMicrotask(() => {
     applyingCloudState = false;
   });
-};
-
-// Friendly Firebase errors
-function friendlyError(error) {
-  const code = error?.code || '';
-
-  if (code === 'auth/unauthorized-domain') {
-    return 'This website domain is not authorized in Firebase Authentication settings.';
-  }
-
-  if (code === 'auth/popup-blocked') {
-    return 'Your browser blocked the sign-in popup. Allow popups and try again.';
-  }
-
-  if (code === 'auth/popup-closed-by-user') {
-    return 'The sign-in window was closed before completion.';
-  }
-
-  if (code === 'permission-denied' ||
-      code === 'firestore/permission-denied') {
-    return 'Firestore denied access. Check your security rules.';
-  }
-
-  return error?.message || 'Please try again.';
 }
 
-// Google sign-in
+// ==========================================
+// GOOGLE SIGN IN
+// ==========================================
+
 async function signIn() {
   try {
-    emitStatus(null, 'Opening Google sign-in…');
+    emitStatus(null, 'Opening Google sign-in...');
 
     await signInWithPopup(auth, provider);
 
@@ -131,12 +138,61 @@ async function signIn() {
   }
 }
 
-// Sign out
+// ==========================================
+// FRIENDLY ERROR MESSAGES
+// ==========================================
+
+function friendlyError(error) {
+  const code = error?.code || '';
+
+  if (code === 'auth/unauthorized-domain') {
+    return 'This website domain is not authorized in Firebase Authentication.';
+  }
+
+  if (code === 'auth/popup-blocked') {
+    return 'Your browser blocked the popup. Allow popups and try again.';
+  }
+
+  if (code === 'auth/popup-closed-by-user') {
+    return 'The sign-in window was closed before completion.';
+  }
+
+  if (
+    code === 'permission-denied' ||
+    code === 'firestore/permission-denied'
+  ) {
+    return 'Firestore denied access. Check your security rules.';
+  }
+
+  if (
+    error?.message?.includes('client is offline') ||
+    code === 'unavailable'
+  ) {
+    return 'Unable to connect to Firebase. Check your internet connection and try again.';
+  }
+
+  return error?.message || 'Something went wrong. Please try again.';
+}
+
+// ==========================================
+// GOOGLE SIGN OUT
+// ==========================================
+
 async function signOutUser() {
   try {
+    cloudReady = false;
+
+    clearTimeout(writeTimer);
+
+    if (unsubscribeDocument) {
+      unsubscribeDocument();
+      unsubscribeDocument = null;
+    }
+
     await signOut(auth);
+
   } catch (error) {
-    console.error(error);
+    console.error('Sign-out failed:', error);
 
     emitStatus(
       activeUser,
@@ -145,31 +201,55 @@ async function signOutUser() {
   }
 }
 
-// Save data to Firestore
+// ==========================================
+// SAVE DATA TO CLOUD
+// ==========================================
+
 function scheduleCloudSave(data) {
-  if (!activeUser || !cloudReady || applyingCloudState) {
+  if (
+    !activeUser ||
+    !cloudReady ||
+    applyingCloudState
+  ) {
     return;
   }
+
+  const userId = activeUser.uid;
 
   clearTimeout(writeTimer);
 
   writeTimer = setTimeout(async () => {
+
+    // Make sure the same account is still active.
+    if (
+      !activeUser ||
+      activeUser.uid !== userId ||
+      auth.currentUser?.uid !== userId ||
+      !cloudReady
+    ) {
+      return;
+    }
+
     try {
-      const ref = doc(db, 'users', activeUser.uid);
+      const userRef = doc(db, 'users', userId);
 
       await setDoc(
-        ref,
+        userRef,
         {
           appData: data,
           updatedAt: serverTimestamp()
         },
-        { merge: true }
+        {
+          merge: true
+        }
       );
 
-      emitStatus(
-        activeUser,
-        'All changes synced to your Google account.'
-      );
+      if (auth.currentUser?.uid === userId) {
+        emitStatus(
+          activeUser,
+          'All changes synced to your Google account.'
+        );
+      }
 
     } catch (error) {
       console.error('Cloud save failed:', error);
@@ -179,26 +259,46 @@ function scheduleCloudSave(data) {
         `Cloud sync error: ${friendlyError(error)}`
       );
     }
+
   }, 650);
 }
 
-// Listen for local app changes
-window.addEventListener('weighttrack:local-change', event => {
-  scheduleCloudSave(event.detail);
-});
+// ==========================================
+// LISTEN FOR APP DATA CHANGES
+// ==========================================
 
-// Authentication buttons
-document.getElementById('authButton')
+window.addEventListener(
+  'weighttrack:local-change',
+  event => {
+    scheduleCloudSave(event.detail);
+  }
+);
+
+// ==========================================
+// BUTTON EVENTS
+// ==========================================
+
+document
+  .getElementById('authButton')
   ?.addEventListener('click', () => {
-    activeUser ? signOutUser() : signIn();
+    if (activeUser) {
+      signOutUser();
+    } else {
+      signIn();
+    }
   });
 
-document.getElementById('signOutButton')
+document
+  .getElementById('signOutButton')
   ?.addEventListener('click', signOutUser);
 
-// Authentication state listener
+// ==========================================
+// AUTHENTICATION STATE LISTENER
+// ==========================================
+
 onAuthStateChanged(auth, async user => {
-  activeUser = user;
+
+  // Stop previous account's pending operations.
   cloudReady = false;
 
   clearTimeout(writeTimer);
@@ -208,121 +308,114 @@ onAuthStateChanged(auth, async user => {
     unsubscribeDocument = null;
   }
 
+  activeUser = user;
+
+  // ========================================
+  // SIGNED OUT
+  // ========================================
+
   if (!user) {
     emitStatus(
       null,
-      'Signed out. Your existing browser data remains on this device.'
+      'Signed out. Sign in to access your personal cloud tracker.'
     );
 
     return;
   }
 
+  const userId = user.uid;
+
   emitStatus(
     user,
-    'Connecting to your private cloud storage…'
+    'Loading your personal cloud data...'
   );
 
-  const ref = doc(db, 'users', user.uid);
+  // Immediately clear old account data from the interface.
+  // This prevents another account's data appearing while loading.
+  emitCloudState(createEmptyState(user));
+
+  // Each Google account has a separate document.
+  const userRef = doc(db, 'users', userId);
 
   try {
-    const snapshot = await getDoc(ref);
 
-    if (snapshot.exists() && snapshot.data().appData) {
+    // ======================================
+    // FETCH THIS ACCOUNT'S FIRESTORE DATA
+    // ======================================
 
-      // Backup existing local data
-      const existingLocal = localState();
+    const snapshot = await getDoc(userRef);
 
-      if (existingLocal) {
-        localStorage.setItem(
-          `${STORAGE_KEY}_precloud_backup`,
-          JSON.stringify(existingLocal)
-        );
-      }
+    // Ignore results if the user switched accounts.
+    if (auth.currentUser?.uid !== userId) {
+      return;
+    }
 
-      // Restore cloud data
+    if (
+      snapshot.exists() &&
+      snapshot.data().appData
+    ) {
+
+      // Existing account: restore its own data.
       emitCloudState(snapshot.data().appData);
 
       emitStatus(
         user,
-        'Your cloud data has been restored on this device.'
+        'Your personal tracker data has been restored.'
       );
 
     } else {
 
-      // Migrate existing local data
-      const currentLocal = localState();
+      // New account: create a completely fresh tracker.
+      // DO NOT COPY DATA FROM LOCAL STORAGE.
 
-      if (currentLocal) {
+      const emptyState = createEmptyState(user);
 
-        await setDoc(
-          ref,
-          {
-            appData: currentLocal,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          },
-          { merge: true }
-        );
+      await setDoc(userRef, {
+        appData: emptyState,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
-      } else {
-
-        // First-time user
-        const emptyState = {
-          profile: {
-            name: user.displayName || '',
-            unit: 'kg',
-            heightCm: '',
-            startWeight: null,
-            targetWeight: null,
-            targetDate: '',
-            weeklyRate: 0.5,
-            weighDays: [4, 0],
-            weighTime: '08:00',
-            dailyReminder: false,
-            dailyTime: '09:00',
-            notificationsEnabled: false,
-            theme: 'light',
-            setupComplete: false
-          },
-
-          entries: [],
-          tasksByDate: {},
-          reminderLog: {}
-        };
-
-        await setDoc(
-          ref,
-          {
-            appData: emptyState,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          },
-          { merge: true }
-        );
-
-        emitCloudState(emptyState);
+      if (auth.currentUser?.uid !== userId) {
+        return;
       }
+
+      emitCloudState(emptyState);
 
       emitStatus(
         user,
-        'Your existing tracker data has been backed up to the cloud.'
+        'Your new personal tracker is ready.'
       );
     }
 
-    // Enable cloud synchronization
+    // ======================================
+    // ENABLE CLOUD SAVING
+    // ======================================
+
     cloudReady = true;
 
-    // Listen for cloud changes
+    // ======================================
+    // REAL-TIME CLOUD SYNC
+    // ======================================
+
     unsubscribeDocument = onSnapshot(
-      ref,
+      userRef,
 
       docSnapshot => {
-        if (!docSnapshot.exists()) return;
 
-        const data = docSnapshot.data().appData;
+        // Ignore updates belonging to another account.
+        if (auth.currentUser?.uid !== userId) {
+          return;
+        }
 
-        if (data) {
-          emitCloudState(data);
+        if (!docSnapshot.exists()) {
+          return;
+        }
+
+        const cloudData = docSnapshot.data().appData;
+
+        if (cloudData) {
+          emitCloudState(cloudData);
         }
       },
 
@@ -339,6 +432,8 @@ onAuthStateChanged(auth, async user => {
   } catch (error) {
 
     console.error('Firebase setup failed:', error);
+
+    cloudReady = false;
 
     emitStatus(
       user,
