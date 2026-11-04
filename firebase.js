@@ -10,14 +10,13 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
 import {
-  getFirestore,
+  initializeFirestore,
   doc,
   getDoc,
   setDoc,
   onSnapshot,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-
 // ==========================================
 // FIREBASE CONFIGURATION
 // ==========================================
@@ -38,7 +37,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true
+});
 
 const provider = new GoogleAuthProvider();
 
